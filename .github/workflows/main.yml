@@ -1,48 +1,43 @@
 name: Run Tests with Playwright and xvfb
 
 on:
-  workflow_dispatch: # Allows manual triggering of the workflow
+  workflow_dispatch:
   push:
     branches:
-      - main # Run workflow on push to the 'main' branch
+      - main
 
 jobs:
   run-traffic-command:
     runs-on: ubuntu-latest
 
+    # CORRECTED ENV MAPPING
     env:
-      proxy_password: ${{ secrets.proxy_server }}
-      proxy_server: ${{ secrets.proxy_server }}
+      proxy_server: ${{ secrets.PROXY_SERVER }}      # Make sure this matches your Secret name exactly
+      proxy_password: ${{ secrets.PROXY_PASSWORD }}  # This was pointing to proxy_server before!
 
     steps:
-      # Step 1: Checkout code
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Node.js
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 18 # Specify your required Node.js version
+          node-version: 18
 
-      # Step 3: Install system dependencies
       - name: Install xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      # Step 4: Install project dependencies
       - name: Install project dependencies
         run: npm install
 
-      # Step 5: Install Playwright tools
+      # IMPROVEMENT: Add --with-deps to ensure all browser dependencies are installed
       - name: Install Playwright tools
-        run: npx playwright install
+        run: npx playwright install --with-deps
 
-      # Step 6: Install missing dependencies
       - name: Install missing dependencies
         run: npm install generative-bayesian-network
 
-      # Step 7: Run the Traffic command with xvfb
-      - name: Run traffic command with xvfb in parallel
+      - name: Run traffic command with xvfb
         run: |
           xvfb-run --auto-servernum --server-num=1 --server-args='-screen 0 1920x1080x24' node traffic.js work=2 &
           wait
