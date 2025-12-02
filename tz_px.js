@@ -1,16 +1,15 @@
 import axios from "axios";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import "dotenv/config";
+
 export const checkTz = async (username) => {
-  const proxyHost = process.env.PROXY_SERVER;
-  const proxyPort = process.env.PROXY_PORT;
+  const proxyHost = process.env.proxy_server;
   const proxyUsername = username;
-  const proxyPassword = process.env.PROXY_PASSWORD;
+  const proxyPassword = process.env.proxy_password;
 
   // Properly formatted proxy URL
-  const proxyUrl = `http://${proxyUsername}:${proxyPassword}@${proxyHost}:${proxyPort}`;
+  const proxyUrl = `http://${proxyUsername}:${proxyPassword}@${proxyHost}`;
   const proxyAgent = new HttpsProxyAgent(proxyUrl);
-
   try {
     const response = await axios.get(
       "https://worker-purple-wind-1de7.idrissimahdi2020.workers.dev/",
@@ -24,9 +23,9 @@ export const checkTz = async (username) => {
       }
     );
     const ipDetails = { timezone: response.data.trim() };
-    return ipDetails.timezone || undefined;
+    return ipDetails?.timezone || undefined;
   } catch (error) {
     console.error("Error fetching timezone:", error.message);
-    return null;
+    return undefined;
   }
 };
