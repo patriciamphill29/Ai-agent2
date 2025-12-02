@@ -11,9 +11,8 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
-      PROXY_PORT: ${{ secrets.PROXY_PORT }}
-      PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+      proxy_password: ${{ secrets.proxy_server }}
+      proxy_server: ${{ secrets.proxy_server }}
 
     steps:
       # Step 1: Checkout code
