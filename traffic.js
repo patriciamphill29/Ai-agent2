@@ -2,118 +2,89 @@ import { chromium } from "playwright";
 import { newInjectedContext } from "fingerprint-injector";
 import { checkTz } from "./tz_px.js";
 import "dotenv/config";
-
-// new approach
-// no proxy used
-// just 5 loops
-// change get nodes url
-
-// controll one workflow without stoping it logic
-
-const args = process.argv.slice(2);
-let theworknum = null;
-
-args.forEach((arg) => {
-  if (arg.startsWith("work=")) {
-    theworknum = arg.split("=")[1].match(/\d+/)[0];
-  }
-});
-
-const endPoint = `https://crap-app.pages.dev`;
-async function getNodeInfo() {
-  try {
-    const request = await fetch(`${endPoint}/threads.json`);
-    console.log("Fetching node info...");
-    const data = await request.json();
-    return data;
-  } catch (error) {
-    console.log(error);
-  }
-}
-
-async function getCustomCountries() {
-  try {
-    const request = await fetch(`${endPoint}/countries.json`);
-    console.log("Fetching custom countries...");
-    const data = await request.json();
-    return data;
-  } catch (error) {
-    console.log(error);
-  }
-}
+import fs from "fs/promises";
+import { getRandomProxy } from "./lib/actions.js";
+import axios from "axios";
+const bots = process.argv[2];
+const url = process.argv[3];
 
 function generateRandomNumber(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-const locations = [
-  "se", // Sweden
-  "ng", // Nigeria
-  "cm", // Cameroon
-  "ci", // Cote D'Ivoire
-  "ua", // Ukraine
-  "at", // Austria
-  "at", // Austria
-  "fr", // France
+// High CPM Tier 1 Countries (Premium Ad Rates)
+const tier1Countries = [
+  "us",
+  "us",
+  "us",
+  "us",
+  "us",
+  "us",
+  "us",
+  "us",
+  "us",
+  "us", // United States (highest CPM)
+  "ca",
+  "ca",
+  "ca",
+  "ca",
   "ca", // Canada
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "us", // United States
-  "fr", // France
-  "fr", // France
-  "fr", // France
+  "uk",
+  "uk",
+  "uk",
   "uk", // United Kingdom
+  "au",
+  "au",
+  "au",
   "au", // Australia
+  "de",
+  "de",
   "de", // Germany
+  "no",
+  "no",
+  "no", // Norway
+  "se",
+  "se",
+  "se", // Sweden
+  "ch",
+  "ch", // Switzerland
+  "dk",
+  "dk", // Denmark
+  "nl",
+  "nl", // Netherlands
+  "fi", // Finland
+  "at", // Austria
+  "ie", // Ireland
+  "nz", // New Zealand
+];
+
+// Mid CPM Tier 2 Countries (Good Ad Rates)
+const tier2Countries = [
+  "fr",
+  "fr",
+  "fr", // France
+  "jp",
   "jp", // Japan
+  "sg",
   "sg", // Singapore
+  "kr",
   "kr", // South Korea
+  "it",
   "it", // Italy
+  "es",
   "es", // Spain
+  "be", // Belgium
+  "hk", // Hong Kong
+  "il", // Israel
+  "ae", // United Arab Emirates
+  "pt", // Portugal
+  "gr", // Greece
+  "pl", // Poland
+  "cz", // Czech Republic
+];
+
+// Lower CPM Tier 3 Countries (Moderate Ad Rates)
+const tier3Countries = [
   "in", // India
   "id", // Indonesia
   "ph", // Philippines
@@ -121,25 +92,22 @@ const locations = [
   "my", // Malaysia
   "eg", // Egypt
   "tr", // Turkey
-  "pk", // Pakistan (English speakers, strong internet growth)
-  "bd", // Bangladesh (growing internet users, relevance to global content)
-  "mx", // Mexico (geographical proximity, U.S. ties)
+  "pk", // Pakistan
+  "bd", // Bangladesh
+  "mx", // Mexico
+  "br", // Brazil
+  "ar", // Argentina
+  "cl", // Chile
+  "co", // Colombia
+  "za", // South Africa
+  "ua", // Ukraine
+  "ro", // Romania
   "lk", // Sri Lanka
-  "ml", // Mali
-  "bj", // Benin
-  "ug", // Uganda
-  "mm", // Myanmar
-  "no", // Norway
-  "pf", // French Polynesia
-  "np", // Nepal
-  "bf", // Burkina Faso
-  "cd", // Congo, The Democratic Republic of the
-  "bi", // Burundi
-  "gf", // French Guiana
-  "cf", // Central African Republic
-  "hk", // Hong Kong
-  "cg", // Congo
+  "vn", // Vietnam
 ];
+
+// Combine all tiers (weighted toward higher CPM countries)
+const locations = [...tier1Countries, ...tier2Countries, ...tier3Countries];
 
 // Function to select a random user preference
 const weightedRandom = (weights) => {
@@ -285,13 +253,16 @@ export const noisifyScript = (noise) => `
 `;
 
 // Function to simulate random clicks on a page
-const performRandomClicks = async (page, currentNode) => {
+const performRandomClicks = async (page) => {
+  const numClicks = generateRandomNumber(2, 4); // Random number between 2 and 4
   for (let i = 0; i < 1; i++) {
     const width = await page.evaluate(() => window.innerWidth);
     const height = await page.evaluate(() => window.innerHeight);
     const x = generateRandomNumber(0, width);
     const y = generateRandomNumber(0, height);
+
     await page.mouse.click(x, y);
+    console.log(`Click ${i + 1} performed at position (${x}, ${y})`);
     await page.waitForTimeout(generateRandomNumber(2000, 3000));
   }
 };
@@ -307,30 +278,183 @@ const blockResources = async (page) => {
   });
 };
 
-const OpenBrowser = async (username, currentNode, views) => {
+// Read proxies.txt and return a parsed proxy object or null.
+// Supported line formats (common):
+// - http://user:pass@host:port
+// - user:pass@host:port
+// - host:port
+// - host:port:username:password
+// const getRandomProxy = async () => {
+//   try {
+//     const data = await fs.readFile(
+//       new URL("./proxies.txt", import.meta.url),
+//       "utf8"
+//     );
+//     const lines = data.split(/\r?\n/).map((l) => l.trim());
+//     if (!lines.length) return null;
+//     const pick = lines[Math.floor(Math.random() * lines.length)];
+//     // normalize
+//     let line = pick.trim();
+
+//     // If it already contains a protocol or an @, try URL parsing
+//     try {
+//       if (/^https?:\/\//i.test(line) || line.includes("@")) {
+//         const url = new URL(
+//           line.includes("@") && !/^https?:\/\//i.test(line)
+//             ? `http://${line}`
+//             : line
+//         );
+//         return {
+//           server: url.hostname,
+//           port: url.port || (url.protocol === "https:" ? "443" : "80"),
+//           username: url.username || undefined,
+//           password: url.password || undefined,
+//           url: `${url.protocol}//${url.hostname}:${
+//             url.port || (url.protocol === "https:" ? "443" : "80")
+//           }`,
+//         };
+//       }
+//     } catch (err) {
+//       // fall through to manual parsing
+//     }
+
+//     const parts = line.split(":");
+//     // host:port
+//     if (parts.length === 2) {
+//       return {
+//         server: parts[0],
+//         port: parts[1],
+//         url: `http://${parts[0]}:${parts[1]}`,
+//       };
+//     }
+
+//     // host:port:username:password (common in some lists)
+//     if (parts.length === 4) {
+//       return {
+//         server: parts[0],
+//         port: parts[1],
+//         username: parts[2],
+//         password: parts[3],
+//         url: `http://${parts[0]}:${parts[1]}`,
+//       };
+//     }
+
+//     // fallback: return null for unsupported formats
+//     return null;
+//   } catch (err) {
+//     // If file missing or unreadable, just return null (no proxy)
+//     console.warn(
+//       "Could not read proxies.txt or file empty:",
+//       err?.message || err
+//     );
+//     return null;
+//   }
+// };
+
+// async function checkProxy(proxy) {
+//   if (!proxy || !proxy.ipAddress || !proxy.port) return false;
+
+//   try {
+//     const response = await axios.get("http://httpbun.com/ip", {
+//       proxy: {
+//         protocol: "http",
+//         host: proxy.ipAddress,
+//         port: parseInt(proxy.port, 10),
+//         auth:
+//           proxy.username && proxy.password
+//             ? { username: proxy.username, password: proxy.password }
+//             : undefined,
+//       },
+//       timeout: 10000,
+//       headers: { "User-Agent": "Mozilla/5.0 (ProxyCheckBot)" },
+//     });
+
+//     console.log(
+//       `[SUCCESS] ${proxy.ipAddress}:${proxy.port}${
+//         proxy.username ? `:${proxy.username}` : ""
+//       } - ${JSON.stringify(response.data)}`
+//     );
+//     return true;
+//   } catch (error) {
+//     console.log(
+//       `[FAIL] ${proxy.ipAddress}:${proxy.port} - ${error.message || error}`
+//     );
+//     return false;
+//   }
+// }
+async function checkProxy(proxy) {
+  if (!proxy || !proxy.ipAddress || !proxy.port) return false;
+
+  try {
+    const response = await axios.get("http://httpbun.com/ip", {
+      proxy: {
+        protocol: "http",
+        host: "brd.superproxy.io",
+        port: parseInt("22225", 10),
+        auth: {
+          username: "brd-customer-hl_19cb0fe8-zone-mw-country-us-session-rand",
+          password: "p14eij0n27q7",
+        },
+      },
+      timeout: 10000,
+      headers: { "User-Agent": "Mozilla/5.0 (ProxyCheckBot)" },
+    });
+
+    console.log(
+      `[SUCCESS] ${proxy.ipAddress}:${proxy.port}${
+        proxy.username ? `:${proxy.username}` : ""
+      } - ${JSON.stringify(response.data)}`
+    );
+    return true;
+  } catch (error) {
+    console.log(
+      `[FAIL] ${proxy.ipAddress}:${proxy.port} - ${error.message || error}`
+    );
+    return false;
+  }
+}
+const generateSessionId = (length = 32) => {
+  let result = "";
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+const OpenBrowser = async (link, proxy) => {
   const userPreference = weightedRandom(preferences);
+  // console.log(userPreference);
+
+  // Generate a long random session ID (supports large strings)
+  const sessionId = generateSessionId(50); // Generate 50-character session ID
+  const randomCountry =
+    locations[generateRandomNumber(0, locations.length - 1)];
+  const username = `brd-customer-hl_19cb0fe8-zone-mw-country-${randomCountry}-session-${sessionId}`;
+  console.log(`Session: ${sessionId}, Country: ${randomCountry}`);
   const timezone = await checkTz(username);
   if (timezone == undefined) {
     return;
   }
-  const browser = await chromium.launch({
-    headless: false,
-    proxy: {
-      server: `${process.env.PROXY_SERVER}:${process.env.PROXY_PORT}`,
-      username: username,
-      password: process.env.PROXY_PASSWORD,
-    },
-  });
 
+  console.log("timezone ", timezone);
+
+  const launchOptions = { headless: false };
+  launchOptions.proxy = {
+    server: process.env.proxy_server,
+    username: username,
+    password: process.env.proxy_password,
+  };
+
+  const browser = await chromium.launch(launchOptions);
   const context = await newInjectedContext(browser, {
     fingerprintOptions: {
       devices: [userPreference.device],
       browsers: [userPreference.browser],
       operatingSystems: [userPreference.os],
-      mockWebRTC: true,
+      mockWebRTC: true, // Disable WebRTC mocking
     },
     newContextOptions: {
-      timezoneId: timezone || "America/New_York",
+      timezoneId: "America/New_York",
     },
   });
   try {
@@ -339,13 +463,20 @@ const OpenBrowser = async (username, currentNode, views) => {
     // add media blockers
     await blockResources(page);
     await page.addInitScript(noisifyScript(noise));
-    console.log(
-      `w -> ${theworknum}| views -> ${views.views} | website -> ${currentNode.link} | custom countries -> ${currentNode.custom_location} | threads -> ${currentNode.bots} | Browser view from -> ${timezone} | userPreference -> ${userPreference.device}`
-    );
-    await page.goto(currentNode.link, { waitUntil: "load" });
-    await page.waitForTimeout(7000);
-    await performRandomClicks(page, currentNode);
-    await page.waitForTimeout(30000);
+    console.log("Browser view -> website:", link, "threads:", bots);
+    await page.goto(link, { waitUntil: "load", timeout: 120000 });
+
+    // Wait for network to settle after page load
+    await page
+      .waitForLoadState("networkidle", { timeout: 30000 })
+      .catch(() => {});
+
+    // Random initial wait (simulate human reading time: 5-15 seconds)
+    const initialWait = generateRandomNumber(5000, 15000);
+    await page.waitForTimeout(initialWait);
+    await performRandomClicks(page);
+    const dwellTime = generateRandomNumber(30000, 90000);
+    await page.waitForTimeout(dwellTime);
   } catch (error) {
     console.log(error);
   } finally {
@@ -354,76 +485,40 @@ const OpenBrowser = async (username, currentNode, views) => {
   }
 };
 
-const tasksPoll = async (currentNode, countries, views) => {
-  const botCount = Number(currentNode.bots) || 1;
+// const tasksPoll = async (views) => {
+//   const concurrency = Number(bots) ? Number(bots) : 4;
+//   // tasks array
+//   const tasks = Array.from({ length: concurrency }).map(async () => {
+//     const proxy = await getRandomProxy();
+//     const isWorking = await checkProxy(proxy);
+//     if (isWorking) {
+//       return OpenBrowser(url ? url : "https://www.google.com", proxy);
+//     } else {
+//       return null;
+//     }
+//   });
 
-  const tasks = Array.from({
-    length: botCount,
-  }).map(() => {
-    const customLocations = countries.customLocations
-      ? countries.customLocations
-      : [
-          "se", // Sweden
-          "fr", // France
-          "us", // United States
-        ];
-    let location = currentNode.custom_location
-      ? customLocations[generateRandomNumber(0, customLocations.length + 1)]
-      : locations[generateRandomNumber(0, locations.length + 1)];
+//   await Promise.all(tasks);
+// };
 
-    const username =
-      "qualityser-res-" +
-      location +
-      "-sid-" +
-      String(generateRandomNumber(10000, 10000000));
-
-    return OpenBrowser(username, currentNode, views);
+const tasksPoll = async (views) => {
+  const concurrency = Number(bots) ? Number(bots) : 4;
+  // tasks array
+  const tasks = Array.from({ length: concurrency }).map(async () => {
+    // const proxy = await getRandomProxy();
+    return OpenBrowser(url ? url : "https://www.google.com", {});
   });
 
   await Promise.all(tasks);
 };
 
 const RunTasks = async () => {
-  const nodes = await getNodeInfo();
-  const viewLog = [];
-  const currentNode = nodes["work_" + theworknum];
-  const keys = Object.keys(currentNode);
-
-  keys.map((key) => {
-    viewLog.push({ key: theworknum, node: currentNode[key], views: 0 });
-  });
-
-  for (let i = 0; i < 345535345; i++) {
-    const countries = await getCustomCountries();
-    const nodes = await getNodeInfo();
-
-    if (nodes === undefined || nodes.length < 0) {
-      console.log("No nodes found or error fetching nodes.");
-      return;
-    }
-    const currentNode = nodes["work_" + theworknum];
-    const keys = Object.keys(currentNode);
-
-    const tasks = keys.map((key) => {
-      viewLog.map((item) =>
-        item.node.link === currentNode[key].link
-          ? (item.views += currentNode[key].bots)
-          : item
-      );
-      // Call tasksPoll for each node
-      return tasksPoll(
-        currentNode[key],
-        countries,
-        viewLog.find((item) => item.node.link === currentNode[key].link)
-      );
-    });
-
-    console.log(
-      `Running tasks for workflow ${theworknum}, nodes ${
-        keys.length
-      }, iteration ${i + 1}`
-    );
-    await Promise.all(tasks);
+  let views = 0;
+  const tasks = 100;
+  for (let i = 0; i < tasks; i++) {
+    views++;
+    console.log(views * Number(bots));
+    await tasksPoll(views);
   }
 };
 
