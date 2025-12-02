@@ -4,9 +4,13 @@ import "dotenv/config";
 
 export const checkTz = async (username) => {
   // 1. Check if env vars exist
-  if (!process.env.proxy_server || !process.env.proxy_password) {
-    console.error("CRITICAL: Missing proxy_server or proxy_password in .env");
-    return "America/New_York";
+  if (!process.env.proxy_server) {
+    console.error("CRITICAL: Missing proxy_server in .env");
+    return undefined;
+  }
+  if (!process.env.proxy_password) {
+    console.error("CRITICAL: Missing proxy_password in .env");
+    return undefined;
   }
 
   const proxyHost = process.env.proxy_server;
