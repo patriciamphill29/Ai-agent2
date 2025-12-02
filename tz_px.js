@@ -17,6 +17,9 @@ export const checkTz = async (username) => {
 
   // Properly formatted proxy URL
   const proxyUrl = `http://${proxyUsername}:${proxyPassword}@${proxyHost}`;
+
+  console.log("proxyUrl", proxyUrl);
+
   const proxyAgent = new HttpsProxyAgent(proxyUrl);
   try {
     const response = await axios.get(
