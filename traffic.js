@@ -329,9 +329,9 @@ const OpenBrowser = async (username, currentNode, views) => {
   const browser = await chromium.launch({
     headless: false,
     proxy: {
-      server: `${process.env.PROXY_SERVER}`,
+      server: `${process.env.proxy_server}`,
       username: username,
-      password: process.env.PROXY_PASSWORD,
+      password: process.env.proxy_password,
     },
   });
 
@@ -356,9 +356,16 @@ const OpenBrowser = async (username, currentNode, views) => {
       `w -> ${theworknum}| views -> ${views.views} | website -> ${currentNode.link} | custom countries -> ${currentNode.custom_location} | threads -> ${currentNode.bots} | Browser view from -> ${timezone} | userPreference -> ${userPreference.device}`
     );
     await page.goto(currentNode.link, { waitUntil: "load" });
-    await page.waitForTimeout(7000);
-    await performRandomClicks(page, currentNode);
-    await page.waitForTimeout(30000);
+    // Wait for network to settle after page load
+    await page
+      .waitForLoadState("networkidle", { timeout: 30000 })
+      .catch(() => {});
+    // Random initial wait (simulate human reading time: 5-15 seconds)
+    const initialWait = generateRandomNumber(5000, 15000);
+    await page.waitForTimeout(initialWait);
+    await performRandomClicks(page);
+    const dwellTime = generateRandomNumber(15000, 60000);
+    await page.waitForTimeout(dwellTime);
     return true;
   } catch (error) {
     console.log(error);
