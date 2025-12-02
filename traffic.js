@@ -2,8 +2,6 @@ import { chromium } from "playwright";
 import { newInjectedContext } from "fingerprint-injector";
 import { checkTz } from "./tz_px.js";
 import "dotenv/config";
-import fs from "fs/promises";
-import { getRandomProxy } from "./lib/actions.js";
 import axios from "axios";
 const bots = process.argv[2];
 const url = process.argv[3];
