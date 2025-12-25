@@ -1,4 +1,4 @@
-name: Run Tests with tmate
+name: qBittorrent Enhanced Edition + FileGator
 
 on:
   workflow_dispatch:
@@ -7,68 +7,86 @@ on:
       - main
 
 jobs:
-  run-test-command:
+  enhanced-stack:
     runs-on: ubuntu-latest
+
     steps:
-     - name: Maximize Build Space
-       uses: easimon/maximize-build-space@master
-       with:
-        root-reserve-mb: 2048       # Keep 2GB for system
-        swap-size-mb: 512          # Shrink swap to 1GB (default is 4GB)
-        remove-dotnet: 'true'       # Remove .NET
-        remove-android: 'true'      # Remove Android SDKs
-        remove-haskell: 'true'      # Remove Haskell
-        remove-codeql: 'true'       # Remove CodeQL
-        remove-docker-images: 'false' # Remove cached Docker images
-      
-     - name: Checkout Code
-       uses: actions/checkout@v4
-    
-     - name: Verify Free Space
-       run: |
-        echo "Disk Space:"
+    - name: Maximize Build Space
+      uses: easimon/maximize-build-space@master
+      with:
+        root-reserve-mb: 2048
+        swap-size-mb: 512
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'false'
+
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Verify System Resources
+      run: |
+        echo "Disk:"
         df -h
         echo "----------------"
-        echo "Memory/Swap:"
+        echo "Memory:"
         free -m
 
+    - name: Prepare Directories
+      run: |
+        BASE=/home/runner/work/Ai-agent2/Ai-agent2
+        mkdir -p $BASE/config
+        mkdir -p $BASE/downloads
+        chmod -R 777 $BASE
 
-     - name: Create Directories
-       run: |
-          mkdir -p /home/runner/work/Ai-agent2/Ai-agent2/config
-          mkdir -p /home/runner/work/Ai-agent2/Ai-agent2/downloads
-          chmod -R 777 /home/runner/work/Ai-agent2/Ai-agent2
+    # 🔥 CRITICAL: ensure clean config so env vars apply
+    - name: Reset qBittorrent Config
+      run: |
+        rm -rf /home/runner/work/Ai-agent2/Ai-agent2/config/*
 
-     - name: Install Cloudflared
-       run: |
-          # Add cloudflare gpg key
-          sudo mkdir -p --mode=0755 /usr/share/keyrings
-          curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
+    - name: Install Cloudflared
+      run: |
+        sudo mkdir -p --mode=0755 /usr/share/keyrings
+        curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg \
+          | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
 
-          # Add this repo to your apt repositories
-          echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+        echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' \
+          | sudo tee /etc/apt/sources.list.d/cloudflared.list
 
-          # install cloudflared
-          sudo apt-get update && sudo apt-get install cloudflared
+        sudo apt-get update
+        sudo apt-get install -y cloudflared
 
-          # install service
-          sudo cloudflared service install ${{ secrets.CLOUDFLARE_TOKEN }}
+        sudo cloudflared service install ${{ secrets.CLOUDFLARE_TOKEN }}
 
-     - name: Install qBittorrent
-       run: |
-          docker run -d \
-            --name=qbittorrent \
-            -e PUID=1001 \
-            -e PGID=1001 \
-            -e WEBUI_PORT=8081 \
-            -e WEBUI_USERNAME=mahdi \
-            -e WEBUI_PASSWORD=mahdi2019 \
-            -p 8081:8081 \
-            -p 6881:6881 \
-            -p 6881:6881/udp \
-            -v /home/runner/work/Ai-agent2/Ai-agent2/config:/config \
-            -v /home/runner/work/Ai-agent2/Ai-agent2/downloads:/downloads \
-            --restart unless-stopped \
-            linuxserver/qbittorrent:latest
-     - name: Start SSH Session
-       uses: mxschmitt/action-tmate@v3
+    - name: Run qBittorrent Enhanced Edition
+      run: |
+        docker run -d \
+          --name=qbittorrent-ee \
+          -e PUID=1000 \
+          -e PGID=1000 \
+          -e WEBUI_PORT=8081 \
+          -e WEBUI_USERNAME=mahdi \
+          -e WEBUI_PASSWORD=mahdi2019 \
+          -e QB_EE_AUTO_UPDATE=true \
+          -p 8081:8081 \
+          -p 6881:6881 \
+          -p 6881:6881/udp \
+          -v /home/runner/work/Ai-agent2/Ai-agent2/config:/config \
+          -v /home/runner/work/Ai-agent2/Ai-agent2/downloads:/downloads \
+          --restart unless-stopped \
+          c0re100/qbittorrent-enhanced-edition:latest
+
+    - name: Run FileGator
+      run: |
+        docker run -d \
+          --name=filegator \
+          -p 8080:8080 \
+          -v /home/runner/work/Ai-agent2/Ai-agent2:/var/www/filegator/repository \
+          -e FILEGATOR_USERNAME=mahdi \
+          -e FILEGATOR_PASSWORD=mahdi2019 \
+          --restart unless-stopped \
+          filegator/filegator
+
+    - name: Start SSH Session (tmate)
+      uses: mxschmitt/action-tmate@v3
