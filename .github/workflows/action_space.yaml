@@ -57,7 +57,34 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y cloudflared
 
+        # Installs the service using your token secret
         sudo cloudflared service install ${{ secrets.CLOUDFLARE_TOKEN }}
+
+    # -----------------------------------------------------------
+    # 1. RUN PORTAINER (Docker Management UI) - Port 9000
+    # -----------------------------------------------------------
+    - name: Run Portainer
+      run: |
+        docker run -d \
+          -p 9000:9000 \
+          --name=portainer \
+          --restart=always \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v portainer_data:/data \
+          portainer/portainer-ce:latest
+
+    # -----------------------------------------------------------
+    # 2. RUN TTYD (Web Terminal) - Port 7681
+    # -----------------------------------------------------------
+    - name: Run Ttyd (Web Terminal)
+      run: |
+        docker run -d \
+          --name ttyd \
+          -p 7681:7681 \
+          -v /home/runner/work/Ai-agent2/Ai-agent2:/workspace \
+          --workdir /workspace \
+          tsl0922/ttyd:alpine \
+          ttyd -W -c admin:password123 bash
 
     - name: Run qBittorrent
       run: |
@@ -87,5 +114,6 @@ jobs:
           --restart unless-stopped \
           filegator/filegator
 
-    - name: Start SSH Session (tmate)
-      uses: mxschmitt/action-tmate@v3
+    # Keep the job alive so Cloudflare tunnel stays up
+    - name: Keep Alive
+      run: sleep 6h
