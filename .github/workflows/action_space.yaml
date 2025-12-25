@@ -99,6 +99,6 @@ jobs:
           
           # 6. Set credentials
           # Note: We must specify the DB path inside the exec command just in case
-          docker exec filebrowser /filebrowser users add mahdi mahdi2019 --perm.admin
+          docker exec filebrowser filebrowser users add mahdi mahdi2019 --perm.admin
      - name: Start SSH Session
        uses: mxschmitt/action-tmate@v3
