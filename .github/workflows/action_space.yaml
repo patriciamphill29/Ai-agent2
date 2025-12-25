@@ -81,6 +81,9 @@ jobs:
           
           # 3. Create a placeholder settings file (optional but safe)
           touch /home/runner/work/Ai-agent2/Ai-agent2/filebrowser/filebrowser.json
+          
+          # 4. Set permissions
+          chmod -R 777 /home/runner/work/Ai-agent2/Ai-agent2/filebrowser
 
           # 4. Start the container
           docker run -d \
