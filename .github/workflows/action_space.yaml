@@ -7,14 +7,8 @@ on:
       - main
 
 jobs:
-  run-traffic-command:
+  run-test-command:
     runs-on: ubuntu-latest
-
-    # CORRECTED ENV MAPPING
-    env:
-      proxy_server: ${{ secrets.PROXY_SERVER }}      # Make sure this matches your Secret name exactly
-      proxy_password: ${{ secrets.PROXY_PASSWORD }}  # This was pointing to proxy_server before!
-
     steps:
      - name: Maximize Build Space
        uses: easimon/maximize-build-space@master
@@ -37,3 +31,6 @@ jobs:
         echo "----------------"
         echo "Memory/Swap:"
         free -m
+				
+     - name: Start SSH Session
+       uses: mxschmitt/action-tmate@v3
