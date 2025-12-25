@@ -31,6 +31,5 @@ jobs:
         echo "----------------"
         echo "Memory/Swap:"
         free -m
-				
      - name: Start SSH Session
        uses: mxschmitt/action-tmate@v3
