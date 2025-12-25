@@ -76,30 +76,24 @@ jobs:
           # 1. Create the directory
           mkdir -p /home/runner/work/Ai-agent2/Ai-agent2/filebrowser
           
-          # 2. Set permissions
+          # 2. Set permissions (make it world-writable)
           chmod -R 777 /home/runner/work/Ai-agent2/Ai-agent2/filebrowser
 
-          # 3. Start the container
+          # 3. Start the container (without PUID/PGID to avoid permission issues)
           docker run -d \
             --name=filebrowser \
             -p 8080:80 \
             -v /home/runner/work/Ai-agent2/Ai-agent2:/srv \
             -v /home/runner/work/Ai-agent2/Ai-agent2/filebrowser:/database \
-            -e PUID=1001 \
-            -e PGID=1001 \
             --restart unless-stopped \
-            filebrowser/filebrowser:latest
+            filebrowser/filebrowser:latest \
+            --database /database/filebrowser.db \
+            --root /srv
           
           # 4. Wait for startup
           sleep 5
           
-          # 5. Initialize the database
-          docker exec filebrowser filebrowser config init
-          
-          # 6. Set the database path
-          docker exec filebrowser filebrowser config set --database /database/filebrowser.db
-          
-          # 7. Create admin user
-          docker exec filebrowser filebrowser users add mahdi mahdi2019 --perm.admin
+          # 5. Create admin user
+          docker exec filebrowser filebrowser users add mahdi mahdi2019 --perm.admin --database /database/filebrowser.db
      - name: Start SSH Session
        uses: mxschmitt/action-tmate@v3
