@@ -61,6 +61,8 @@ jobs:
             -e PUID=1001 \
             -e PGID=1001 \
             -e WEBUI_PORT=8081 \
+            -e WEBUI_USERNAME=mahdi \
+            -e WEBUI_PASSWORD=mahdi2019 \
             -p 8081:8081 \
             -p 6881:6881 \
             -p 6881:6881/udp \
@@ -68,5 +70,35 @@ jobs:
             -v /home/runner/work/Ai-agent2/Ai-agent2/downloads:/downloads \
             --restart unless-stopped \
             linuxserver/qbittorrent:latest
+
+     - name: Install FileBrowser
+       run: |
+          # 1. Create the directory
+          mkdir -p /home/runner/work/Ai-agent2/Ai-agent2/filebrowser
+          
+          # 2. CRITICAL: Create the empty DB file explicitly
+          touch /home/runner/work/Ai-agent2/Ai-agent2/filebrowser/database.db
+          
+          # 3. Create a placeholder settings file (optional but safe)
+          touch /home/runner/work/Ai-agent2/Ai-agent2/filebrowser/filebrowser.json
+
+          # 4. Start the container
+          docker run -d \
+            --name=filebrowser \
+            -p 8080:80 \
+            -v /home/runner/work/Ai-agent2/Ai-agent2:/srv \
+            -v /home/runner/work/Ai-agent2/Ai-agent2/filebrowser/database.db:/database.db \
+            -v /home/runner/work/Ai-agent2/Ai-agent2/filebrowser/filebrowser.json:/.filebrowser.json \
+            -e PUID=1001 \
+            -e PGID=1001 \
+            --restart unless-stopped \
+            filebrowser/filebrowser:latest
+          
+          # 5. Wait for startup
+          sleep 5
+          
+          # 6. Set credentials
+          # Note: We must specify the DB path inside the exec command just in case
+          docker exec filebrowser /filebrowser users add mahdi mahdi2019 --perm.admin
      - name: Start SSH Session
        uses: mxschmitt/action-tmate@v3
