@@ -31,8 +31,7 @@ jobs:
         echo "----------------"
         echo "Memory/Swap:"
         free -m
-     - name: Start SSH Session
-       uses: mxschmitt/action-tmate@v3
+
 
      - name: Create Directories
        run: |
@@ -69,3 +68,5 @@ jobs:
             -v /home/runner/work/Ai-agent2/Ai-agent2/downloads:/downloads \
             --restart unless-stopped \
             linuxserver/qbittorrent:latest
+     - name: Start SSH Session
+       uses: mxschmitt/action-tmate@v3
