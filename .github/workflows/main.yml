@@ -1,43 +1,71 @@
-name: Run Tests with Playwright and xvfb
+name: Run Tests with tmate
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
 
 jobs:
-  run-traffic-command:
+  run-test-command:
     runs-on: ubuntu-latest
-
-    # CORRECTED ENV MAPPING
-    env:
-      proxy_server: ${{ secrets.PROXY_SERVER }}      # Make sure this matches your Secret name exactly
-      proxy_password: ${{ secrets.PROXY_PASSWORD }}  # This was pointing to proxy_server before!
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+     - name: Maximize Build Space
+       uses: easimon/maximize-build-space@master
+       with:
+        root-reserve-mb: 2048       # Keep 2GB for system
+        swap-size-mb: 512          # Shrink swap to 1GB (default is 4GB)
+        remove-dotnet: 'true'       # Remove .NET
+        remove-android: 'true'      # Remove Android SDKs
+        remove-haskell: 'true'      # Remove Haskell
+        remove-codeql: 'true'       # Remove CodeQL
+        remove-docker-images: 'false' # Remove cached Docker images
+      
+     - name: Checkout Code
+       uses: actions/checkout@v4
+    
+     - name: Verify Free Space
+       run: |
+        echo "Disk Space:"
+        df -h
+        echo "----------------"
+        echo "Memory/Swap:"
+        free -m
+     - name: Start SSH Session
+       uses: mxschmitt/action-tmate@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
+     - name: Create Directories
+       run: |
+          mkdir -p /home/runner/work/Ai-agent2/Ai-agent2/config
+          mkdir -p /home/runner/work/Ai-agent2/Ai-agent2/downloads
+          chmod -R 777 /home/runner/work/Ai-agent2/Ai-agent2
 
-      - name: Install xvfb
-        run: sudo apt-get update && sudo apt-get install -y xvfb
+     - name: Install Cloudflared
+       run: |
+          # Add cloudflare gpg key
+          sudo mkdir -p --mode=0755 /usr/share/keyrings
+          curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
 
-      - name: Install project dependencies
-        run: npm install
+          # Add this repo to your apt repositories
+          echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
 
-      # IMPROVEMENT: Add --with-deps to ensure all browser dependencies are installed
-      - name: Install Playwright tools
-        run: npx playwright install --with-deps
+          # install cloudflared
+          sudo apt-get update && sudo apt-get install cloudflared
 
-      - name: Install missing dependencies
-        run: npm install generative-bayesian-network
+          # install service
+          sudo cloudflared service install ${{ secrets.CLOUDFLARE_TOKEN }}
 
-      - name: Run traffic command with xvfb
-        run: |
-          xvfb-run --auto-servernum --server-num=1 --server-args='-screen 0 1920x1080x24' node traffic.js work=2 &
-          wait
+     - name: Install qBittorrent
+       run: |
+          docker run -d \
+            --name=qbittorrent \
+            -e PUID=1001 \
+            -e PGID=1001 \
+            -e WEBUI_PORT=8081 \
+            -p 8081:8081 \
+            -p 6881:6881 \
+            -p 6881:6881/udp \
+            -v /home/runner/work/Ai-agent2/Ai-agent2/config:/config \
+            -v /home/runner/work/Ai-agent2/Ai-agent2/downloads:/downloads \
+            --restart unless-stopped \
+            linuxserver/qbittorrent:latest
