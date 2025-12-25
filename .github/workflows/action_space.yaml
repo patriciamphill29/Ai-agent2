@@ -1,0 +1,39 @@
+name: Run Tests with Playwright and xvfb
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  run-traffic-command:
+    runs-on: ubuntu-latest
+
+    # CORRECTED ENV MAPPING
+    env:
+      proxy_server: ${{ secrets.PROXY_SERVER }}      # Make sure this matches your Secret name exactly
+      proxy_password: ${{ secrets.PROXY_PASSWORD }}  # This was pointing to proxy_server before!
+
+    steps:
+     - name: Maximize Build Space
+       uses: easimon/maximize-build-space@master
+       with:
+        root-reserve-mb: 2048       # Keep 2GB for system
+        swap-size-mb: 512          # Shrink swap to 1GB (default is 4GB)
+        remove-dotnet: 'true'       # Remove .NET
+        remove-android: 'true'      # Remove Android SDKs
+        remove-haskell: 'true'      # Remove Haskell
+        remove-codeql: 'true'       # Remove CodeQL
+        remove-docker-images: 'false' # Remove cached Docker images
+      
+     - name: Checkout Code
+       uses: actions/checkout@v4
+    
+     - name: Verify Free Space
+       run: |
+        echo "Disk Space:"
+        df -h
+        echo "----------------"
+        echo "Memory/Swap:"
+        free -m
