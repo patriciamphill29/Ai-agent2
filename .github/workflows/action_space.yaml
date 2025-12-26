@@ -87,22 +87,22 @@ jobs:
         # "nohup" keeps it running even if this step finishes
         nohup ttyd -p 7681 -W -c admin:password123 bash > ttyd.log 2>&1 &
 
-    - name: Run qBittorrent
-      run: |
-        docker run -d \
-          --name=qbittorrent \
-          -e PUID=1000 \
-          -e PGID=1000 \
-          -e WEBUI_PORT=8081 \
-          -e WEBUI_USERNAME=mahdi \
-          -e WEBUI_PASSWORD=mahdi2019 \
-          -p 8081:8081 \
-          -p 6881:6881 \
-          -p 6881:6881/udp \
-          -v /home/runner/work/Ai-agent2/Ai-agent2/config:/config \
-          -v /home/runner/work/Ai-agent2/Ai-agent2/downloads:/downloads \
-          --restart unless-stopped \
-          linuxserver/qbittorrent:latest
+    # - name: Run qBittorrent
+    #   run: |
+    #     docker run -d \
+    #       --name=qbittorrent \
+    #       -e PUID=1000 \
+    #       -e PGID=1000 \
+    #       -e WEBUI_PORT=8081 \
+    #       -e WEBUI_USERNAME=mahdi \
+    #       -e WEBUI_PASSWORD=mahdi2019 \
+    #       -p 8081:8081 \
+    #       -p 6881:6881 \
+    #       -p 6881:6881/udp \
+    #       -v /home/runner/work/Ai-agent2/Ai-agent2/config:/config \
+    #       -v /home/runner/work/Ai-agent2/Ai-agent2/downloads:/downloads \
+    #       --restart unless-stopped \
+    #       linuxserver/qbittorrent:latest
 
     - name: Run FileGator
       run: |
