@@ -2,9 +2,9 @@ name: Run Tests with tmate
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+  # push:
+  #   branches:
+  #     - main
 
 jobs:
   run-test-command:
