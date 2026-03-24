@@ -21,10 +21,11 @@ args.forEach((arg) => {
 // change this
 //const endPoint = `http://localhost:3000`; // change this
 // change this
-const endPoint = "https://crap-app.pages.dev";
+const endPoint =
+  "https://main-managment-dashboard.idrissimahdi2020.workers.dev";
 async function getNodeInfo() {
   try {
-    const request = await fetch(`${endPoint}/threads.json`);
+    const request = await fetch(`${endPoint}/api/config/threads`);
     console.log("Fetching node info...");
     const data = await request.json();
     return data;
@@ -35,7 +36,7 @@ async function getNodeInfo() {
 
 async function getCustomCountries() {
   try {
-    const request = await fetch(`${endPoint}/countries.json`);
+    const request = await fetch(`${endPoint}/api/config/customloc`);
     console.log("Fetching custom countries...");
     const data = await request.json();
     return data;
@@ -318,6 +319,43 @@ const generateSessionId = (length = 32) => {
   return result;
 };
 
+// Generate realistic human-like timing within a 70-80 second window
+const generateHumanTiming = () => {
+  // Total session window: 70-80 seconds
+  const totalSessionTime = generateRandomNumber(70000, 80000);
+
+  // Browser launch delay: 0-20 seconds (stagger users)
+  const launchDelay = generateRandomNumber(0, 20000);
+
+  // Page load wait: 2-5 seconds (after networkidle)
+  const pageLoadWait = generateRandomNumber(2000, 5000);
+
+  // Initial reading time: 8-18 seconds (skimming content)
+  const initialReadTime = generateRandomNumber(8000, 18000);
+
+  // Interaction phase: 3-8 seconds (scrolling, clicking)
+  const interactionTime = generateRandomNumber(3000, 8000);
+
+  // Calculate remaining dwell time to fit within session window
+  const usedTime = pageLoadWait + initialReadTime + interactionTime;
+  const maxDwellTime = totalSessionTime - launchDelay - usedTime;
+
+  // Final dwell time: use remaining time or minimum 5 seconds
+  const finalDwellTime = Math.max(
+    5000,
+    generateRandomNumber(maxDwellTime * 0.5, maxDwellTime),
+  );
+
+  return {
+    launchDelay,
+    pageLoadWait,
+    initialReadTime,
+    interactionTime,
+    finalDwellTime,
+    totalSessionTime,
+  };
+};
+
 const OpenBrowser = async (username, currentNode, views) => {
   const userPreference = weightedRandom(preferences);
   const timezone = await checkTz(username);
@@ -353,7 +391,7 @@ const OpenBrowser = async (username, currentNode, views) => {
     await blockResources(page);
     await page.addInitScript(noisifyScript(noise));
     console.log(
-      `w -> ${theworknum}| views -> ${views.views} | website -> ${currentNode.link} | custom countries -> ${currentNode.custom_location} | threads -> ${currentNode.bots} | Browser view from -> ${timezone} | userPreference -> ${userPreference.device}`
+      `w -> ${theworknum}| views -> ${views.views} | website -> ${currentNode.link} | custom countries -> ${currentNode.custom_location} | threads -> ${currentNode.bots} | Browser view from -> ${timezone} | userPreference -> ${userPreference.device}`,
     );
     await page.goto(currentNode.link, { waitUntil: "load" });
     // Wait for network to settle after page load
@@ -366,6 +404,22 @@ const OpenBrowser = async (username, currentNode, views) => {
     await performRandomClicks(page);
     const dwellTime = generateRandomNumber(15000, 60000);
     await page.waitForTimeout(dwellTime);
+
+    // Register view natively
+    fetch(`${endPoint}/api/views`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        website: new URL(currentNode.link).hostname,
+        viewRegistred: true,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => console.log(data))
+      .catch((err) => console.error("Request failed:", err));
+
     return true;
   } catch (error) {
     console.log(error);
@@ -425,20 +479,20 @@ const RunTasks = async () => {
       viewLog.map((item) =>
         item.node.link === currentNode[key].link
           ? (item.views += currentNode[key].bots)
-          : item
+          : item,
       );
       // Call tasksPoll for each node
       return tasksPoll(
         currentNode[key],
         countries,
-        viewLog.find((item) => item.node.link === currentNode[key].link)
+        viewLog.find((item) => item.node.link === currentNode[key].link),
       );
     });
 
     console.log(
       `Running tasks for workflow ${theworknum}, nodes ${
         keys.length
-      }, iteration ${i + 1}`
+      }, iteration ${i + 1}`,
     );
     await Promise.all(tasks);
   }
