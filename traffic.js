@@ -312,56 +312,51 @@ const blockResources = async (page) => {
 
 const generateSessionId = (length = 32) => {
   let result = "";
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const chars = "0123456789"; // Only use digits to avoid proxy username format issues
   for (let i = 0; i < length; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
 };
 
-// Generate realistic human-like timing within a 70-80 second window
-const generateHumanTiming = () => {
-  // Total session window: 70-80 seconds
-  const totalSessionTime = generateRandomNumber(70000, 80000);
+const generateUsername = (countries, currentNode) => {
+  const customLocations = countries.customLocations
+    ? countries.customLocations
+    : [
+        "se", // Sweden
+        "fr", // France
+        "us", // United States
+      ];
 
-  // Browser launch delay: 0-20 seconds (stagger users)
-  const launchDelay = generateRandomNumber(0, 20000);
+  let location = currentNode.custom_location
+    ? customLocations[generateRandomNumber(0, customLocations.length + 1)]
+    : locations[generateRandomNumber(0, locations.length + 1)];
 
-  // Page load wait: 2-5 seconds (after networkidle)
-  const pageLoadWait = generateRandomNumber(2000, 5000);
-
-  // Initial reading time: 8-18 seconds (skimming content)
-  const initialReadTime = generateRandomNumber(8000, 18000);
-
-  // Interaction phase: 3-8 seconds (scrolling, clicking)
-  const interactionTime = generateRandomNumber(3000, 8000);
-
-  // Calculate remaining dwell time to fit within session window
-  const usedTime = pageLoadWait + initialReadTime + interactionTime;
-  const maxDwellTime = totalSessionTime - launchDelay - usedTime;
-
-  // Final dwell time: use remaining time or minimum 5 seconds
-  const finalDwellTime = Math.max(
-    5000,
-    generateRandomNumber(maxDwellTime * 0.5, maxDwellTime),
-  );
-
-  return {
-    launchDelay,
-    pageLoadWait,
-    initialReadTime,
-    interactionTime,
-    finalDwellTime,
-    totalSessionTime,
-  };
+  const sessionId = generateSessionId(100); // Generate 100-character session ID
+  const username = `brd-customer-hl_19cb0fe8-zone-mw-country-${location}-session-${sessionId}`;
+  return username;
 };
 
-const OpenBrowser = async (username, currentNode, views) => {
+const OpenBrowser = async (username, currentNode, countries, views) => {
   const userPreference = weightedRandom(preferences);
-  const timezone = await checkTz(username);
+  let retry = 3;
+  let timezone = await checkTz(username);
+
   if (timezone == undefined) {
-    console.log("undefined timezone, skipping this bot");
-    return false;
+    console.log("[error] undefined timezone, retry");
+    for (let index = 0; index < 3; index++) {
+      const newUsername = generateUsername(countries, currentNode);
+      timezone = await checkTz(newUsername);
+      if (timezone != undefined) {
+        username = newUsername;
+        break;
+      }
+    }
+    // Only return false if it STILL failed after all retries
+    if (timezone == undefined) {
+      console.log("Failed to get timezone after retries, skipping bot.");
+      return false;
+    }
   }
 
   const browser = await chromium.launch({
@@ -435,20 +430,23 @@ const tasksPoll = async (currentNode, countries, views) => {
   const tasks = Array.from({
     length: botCount || 2,
   }).map(() => {
-    const customLocations = countries.customLocations
-      ? countries.customLocations
-      : [
-          "se", // Sweden
-          "fr", // France
-          "us", // United States
-        ];
-    let location = currentNode.custom_location
-      ? customLocations[generateRandomNumber(0, customLocations.length + 1)]
-      : locations[generateRandomNumber(0, locations.length + 1)];
-    const sessionId = generateSessionId(50); // Generate 50-character session ID
-    const username = `brd-customer-hl_19cb0fe8-zone-mw-country-${location}-session-${sessionId}`;
+    // const customLocations = countries.customLocations
+    //   ? countries.customLocations
+    //   : [
+    //       "se", // Sweden
+    //       "fr", // France
+    //       "us", // United States
+    //     ];
 
-    return OpenBrowser(username, currentNode, views);
+    // let location = currentNode.custom_location
+    //   ? customLocations[generateRandomNumber(0, customLocations.length + 1)]
+    //   : locations[generateRandomNumber(0, locations.length + 1)];
+
+    // const sessionId = generateSessionId(50); // Generate 50-character session ID
+    // const username = `brd-customer-hl_19cb0fe8-zone-mw-country-${location}-session-${sessionId}`;
+    const username = generateUsername(countries, currentNode);
+
+    return OpenBrowser(username, currentNode, countries, views);
   });
 
   await Promise.all(tasks);
