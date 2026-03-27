@@ -19,7 +19,7 @@ args.forEach((arg) => {
   }
 });
 // change this
-//const endPoint = `http://localhost:3000`; // change this
+// const endPoint = `http://localhost:3000`; // change this
 // change this
 const endPoint =
   "https://main-managment-dashboard.idrissimahdi2020.workers.dev";
@@ -320,19 +320,14 @@ const generateSessionId = (length = 32) => {
 };
 
 const generateUsername = (countries, currentNode) => {
-  const customLocations = countries.customLocations
-    ? countries.customLocations
-    : [
-        "se", // Sweden
-        "fr", // France
-        "us", // United States
-      ];
+  // API returns { customLocations: { listName: [...] } }
+  const allLists = countries?.customLocations || {};
+  const listName = currentNode.countriesListName || "default_legacy";
 
-  let location = currentNode.custom_location
-    ? customLocations[generateRandomNumber(0, customLocations.length + 1)]
-    : locations[generateRandomNumber(0, locations.length + 1)];
+  const pool = allLists[listName] ?? allLists["default_legacy"] ?? locations;
 
-  const sessionId = generateSessionId(100); // Generate 100-character session ID
+  const location = pool[generateRandomNumber(0, pool.length - 1)];
+  const sessionId = generateSessionId(100);
   const username = `brd-customer-hl_19cb0fe8-zone-mw-country-${location}-session-${sessionId}`;
   return username;
 };
@@ -386,7 +381,7 @@ const OpenBrowser = async (username, currentNode, countries, views) => {
     await blockResources(page);
     await page.addInitScript(noisifyScript(noise));
     console.log(
-      `w -> ${theworknum}| views -> ${views.views} | website -> ${currentNode.link} | custom countries -> ${currentNode.custom_location} | threads -> ${currentNode.bots} | Browser view from -> ${timezone} | userPreference -> ${userPreference.device}`,
+      `w -> ${theworknum}| views -> ${views.views} | website -> ${currentNode.link} | list -> ${currentNode.countriesListName || "default_legacy"} | threads -> ${currentNode.bots} | Browser view from -> ${timezone} | userPreference -> ${userPreference.device}`,
     );
     await page.goto(currentNode.link, { waitUntil: "load" });
     // Wait for network to settle after page load
@@ -430,22 +425,7 @@ const tasksPoll = async (currentNode, countries, views) => {
   const tasks = Array.from({
     length: botCount || 2,
   }).map(() => {
-    // const customLocations = countries.customLocations
-    //   ? countries.customLocations
-    //   : [
-    //       "se", // Sweden
-    //       "fr", // France
-    //       "us", // United States
-    //     ];
-
-    // let location = currentNode.custom_location
-    //   ? customLocations[generateRandomNumber(0, customLocations.length + 1)]
-    //   : locations[generateRandomNumber(0, locations.length + 1)];
-
-    // const sessionId = generateSessionId(50); // Generate 50-character session ID
-    // const username = `brd-customer-hl_19cb0fe8-zone-mw-country-${location}-session-${sessionId}`;
     const username = generateUsername(countries, currentNode);
-
     return OpenBrowser(username, currentNode, countries, views);
   });
 
@@ -473,24 +453,40 @@ const RunTasks = async () => {
     const currentNode = nodes["work_" + theworknum];
     const keys = Object.keys(currentNode);
 
+    // ── Reconcile viewLog so it always mirrors the live node config ──────────
+    // 1. Add entries for any newly added nodes
+    for (const key of keys) {
+      const link = currentNode[key].link;
+      if (!viewLog.find((item) => item.node.link === link)) {
+        console.log(
+          `[viewLog] New node detected: ${link} — adding to view log.`,
+        );
+        viewLog.push({ key: theworknum, node: currentNode[key], views: 0 });
+      }
+    }
+    // 2. Remove stale entries for nodes that were deleted from the config
+    const activeLinks = new Set(keys.map((k) => currentNode[k].link));
+    for (let j = viewLog.length - 1; j >= 0; j--) {
+      if (!activeLinks.has(viewLog[j].node.link)) {
+        console.log(
+          `[viewLog] Removed node: ${viewLog[j].node.link} — pruning from view log.`,
+        );
+        viewLog.splice(j, 1);
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const tasks = keys.map((key) => {
-      viewLog.map((item) =>
-        item.node.link === currentNode[key].link
-          ? (item.views += currentNode[key].bots)
-          : item,
-      );
-      // Call tasksPoll for each node
-      return tasksPoll(
-        currentNode[key],
-        countries,
-        viewLog.find((item) => item.node.link === currentNode[key].link),
-      );
+      const node = currentNode[key];
+      // Safe: guaranteed to exist after reconciliation above
+      const logEntry = viewLog.find((item) => item.node.link === node.link);
+      logEntry.views += Number(node.bots) || 0;
+
+      return tasksPoll(node, countries, logEntry);
     });
 
     console.log(
-      `Running tasks for workflow ${theworknum}, nodes ${
-        keys.length
-      }, iteration ${i + 1}`,
+      `Running tasks for workflow ${theworknum}, nodes ${keys.length}, iteration ${i + 1}`,
     );
     await Promise.all(tasks);
   }
