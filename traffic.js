@@ -395,20 +395,20 @@ const OpenBrowser = async (username, currentNode, countries, views) => {
     const dwellTime = generateRandomNumber(15000, 60000);
     await page.waitForTimeout(dwellTime);
 
-    // Register view natively
-    fetch(`${endPoint}/api/views`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        website: new URL(currentNode.link).hostname,
-        viewRegistred: true,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => console.log(data))
-      .catch((err) => console.error("Request failed:", err));
+    // // Register view natively
+    // fetch(`${endPoint}/api/views`, {
+    //   method: "POST",
+    //   headers: {
+    //     "Content-Type": "application/json",
+    //   },
+    //   body: JSON.stringify({
+    //     website: new URL(currentNode.link).hostname,
+    //     viewRegistred: true,
+    //   }),
+    // })
+    //   .then((res) => res.json())
+    //   .then((data) => console.log(data))
+    //   .catch((err) => console.error("Request failed:", err));
 
     return true;
   } catch (error) {
@@ -419,17 +419,38 @@ const OpenBrowser = async (username, currentNode, countries, views) => {
   }
 };
 
-const tasksPoll = async (currentNode, countries, views) => {
+const tasksPoll = async (currentNode, countries, views, pendingViews) => {
   const botCount = Number(currentNode.bots) || 1;
+  const hostname = new URL(currentNode.link).hostname;
 
-  const tasks = Array.from({
-    length: botCount || 2,
-  }).map(() => {
+  const tasks = Array.from({ length: botCount || 2 }).map(() => {
     const username = generateUsername(countries, currentNode);
-    return OpenBrowser(username, currentNode, countries, views);
+    return OpenBrowser(username, currentNode, countries, views).then((success) => {
+      if (success) {
+        // Accumulate into the shared batch map instead of sending a request
+        pendingViews[hostname] = (pendingViews[hostname] || 0) + 1;
+      }
+    });
   });
 
   await Promise.all(tasks);
+};
+
+/** Flush all accumulated views to the batch endpoint in a single request */
+const flushViews = async (pendingViews) => {
+  const total = Object.values(pendingViews).reduce((s, c) => s + c, 0);
+  if (total === 0) return;
+  try {
+    const res = await fetch(`${endPoint}/api/views/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(pendingViews),
+    });
+    const data = await res.json();
+    console.log(`[views] Batch flushed → ${data.message || JSON.stringify(data)}`);
+  } catch (err) {
+    console.error("[views] Batch flush failed:", err);
+  }
 };
 
 const RunTasks = async () => {
@@ -476,19 +497,24 @@ const RunTasks = async () => {
     }
     // ────────────────────────────────────────────────────────────────────────
 
+    // One shared batch map per iteration — all threads write into it
+    const pendingViews = {};
+
     const tasks = keys.map((key) => {
       const node = currentNode[key];
-      // Safe: guaranteed to exist after reconciliation above
       const logEntry = viewLog.find((item) => item.node.link === node.link);
       logEntry.views += Number(node.bots) || 0;
 
-      return tasksPoll(node, countries, logEntry);
+      return tasksPoll(node, countries, logEntry, pendingViews);
     });
 
     console.log(
       `Running tasks for workflow ${theworknum}, nodes ${keys.length}, iteration ${i + 1}`,
     );
     await Promise.all(tasks);
+
+    // Single batch request for all views generated this iteration
+    await flushViews(pendingViews);
   }
 };
 
